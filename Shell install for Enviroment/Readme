@@ -1,0 +1,37 @@
+This script is designed for quick installation of essential tools that I regularly use on virtual machines and new systems.
+
+Please note that this script has only been tested on 3 operating systems thus far, and further testing on other operating systems is required. It is important to emphasize that this is not the final version of the script.
+
+The following tools are installed by this script:
+
+cURL
+wget
+dig
+wireshark
+ssh
+nmap
+nc
+vim
+gdb with gef
+nikto
+hydra
+sqlmap
+john
+impacket
+crackmapexec
+pwntools
+masscan
+pwncat
+P.E.A.S.S.
+SecLists
+wpscan
+ffuf
+gobuster
+amass
+mimikatz
+sublist3r
+enum4linux
+enum4linux-ng
+ghidra
+metasploit
+exploitdb
